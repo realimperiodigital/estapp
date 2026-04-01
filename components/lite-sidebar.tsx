@@ -8,8 +8,6 @@ const menuItems = [
   { href: "/clientes", label: "Clientes" },
   { href: "/servicos", label: "Serviços" },
   { href: "/agenda", label: "Agenda" },
-  { href: "/reservas", label: "Reservas" },
-  { href: "/meu-app", label: "Meu App" },
 ];
 
 export default function LiteSidebar() {

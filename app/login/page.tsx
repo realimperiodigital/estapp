@@ -2,20 +2,20 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-
-import { loginWithEmail } from "@/lib/auth";
+import { loginWithEmail, getCurrentSession } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+
+    if (loading) return;
 
     setError("");
     setLoading(true);
@@ -26,9 +26,16 @@ export default function LoginPage() {
         password,
       });
 
+      const session = await getCurrentSession();
+
+      if (!session) {
+        throw new Error("Sessão não encontrada após o login.");
+      }
+
       router.push("/dashboard");
+      router.refresh();
     } catch (err: any) {
-      setError(err.message || "Erro ao fazer login");
+      setError(err?.message || "Erro ao fazer login.");
     } finally {
       setLoading(false);
     }
@@ -37,28 +44,19 @@ export default function LoginPage() {
   return (
     <div className="container">
       <div className="card">
-
-        <h1 className="title">
-          EstApp Lite
-        </h1>
+        <h1 className="title">EstApp Lite</h1>
 
         <form onSubmit={handleLogin}>
-
-          {error && (
-            <div className="error">
-              {error}
-            </div>
-          )}
+          {error ? <div className="error">{error}</div> : null}
 
           <input
             type="email"
             placeholder="Seu email"
             className="input"
             value={email}
-            onChange={(e) =>
-              setEmail(e.target.value)
-            }
+            onChange={(e) => setEmail(e.target.value)}
             required
+            autoComplete="email"
           />
 
           <input
@@ -66,10 +64,9 @@ export default function LoginPage() {
             placeholder="Sua senha"
             className="input"
             value={password}
-            onChange={(e) =>
-              setPassword(e.target.value)
-            }
+            onChange={(e) => setPassword(e.target.value)}
             required
+            autoComplete="current-password"
           />
 
           <button
@@ -77,13 +74,9 @@ export default function LoginPage() {
             className="button"
             disabled={loading}
           >
-            {loading
-              ? "Entrando..."
-              : "Entrar"}
+            {loading ? "Entrando..." : "Entrar"}
           </button>
-
         </form>
-
       </div>
     </div>
   );

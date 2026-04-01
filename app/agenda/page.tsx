@@ -1,151 +1,216 @@
-"use client"
+"use client";
 
-import { useEffect, useState } from "react"
-import Link from "next/link"
-import { supabase } from "@/lib/supabase"
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
-type Atendimento = {
-  id: string
-  titulo: string
-  data_atendimento: string
-  hora_atendimento: string
-  status: string
-  clientes?: {
-    nome?: string
-  } | null
+type AgendaRow = {
+  id: number;
+  data_agendada: string;
+  tipo_atendimento: string | null;
+  observacoes: string | null;
+  status: string | null;
+  cliente_id: number | null;
+  representante_id: string | null;
+  pipeline_id: string | null;
+};
+
+type AgendaItem = {
+  id: number;
+  data_agendada: string;
+  tipo_atendimento: string | null;
+  observacoes: string | null;
+  status: string | null;
+  cliente_nome: string;
+  representante_nome: string;
+  pipeline_nome: string;
+  pipeline_id: string | null;
+};
+
+type PipelineLeadBruto = {
+  id: string;
+  [key: string]: any;
+};
+
+function montarNomeLead(lead: PipelineLeadBruto): string {
+  return (
+    lead.nome_lead ||
+    lead.nome ||
+    lead.nome_cliente ||
+    lead.empresa ||
+    lead.titulo ||
+    lead.razao_social ||
+    lead.fantasia ||
+    `Lead ${String(lead.id).slice(0, 8)}`
+  );
 }
 
 export default function AgendaPage() {
-  const [lista, setLista] = useState<Atendimento[]>([])
+  const [agenda, setAgenda] = useState<AgendaItem[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  async function carregar() {
-    const { data, error } = await supabase
-      .from("agenda_atendimentos")
-      .select(`
-        id,
-        titulo,
-        data_atendimento,
-        hora_atendimento,
-        status,
-        clientes (
-          nome
-        )
-      `)
-      .order("data_atendimento", { ascending: true })
-      .order("hora_atendimento", { ascending: true })
+  async function atualizarStatus(
+    id: number,
+    novoStatus: string,
+    pipelineId: string | null
+  ) {
+    const { error } = await supabase
+      .from("agenda_comercial")
+      .update({ status: novoStatus })
+      .eq("id", id);
 
     if (error) {
-      console.error("Erro ao carregar agenda:", error)
-      return
+      alert("Erro ao atualizar status da agenda");
+      return;
     }
 
-    const listaTratada: Atendimento[] = (data || []).map((item: any) => ({
-      id: String(item.id),
-      titulo: item.titulo ?? "",
-      data_atendimento: item.data_atendimento ?? "",
-      hora_atendimento: item.hora_atendimento ?? "",
-      status: item.status ?? "AGENDADO",
-      clientes: Array.isArray(item.clientes)
-        ? item.clientes[0] ?? null
-        : item.clientes ?? null,
-    }))
+    if (novoStatus === "realizado" && pipelineId) {
+      const { error: pipelineError } = await supabase
+        .from("pipeline_leads")
+        .update({ status: "atendido" })
+        .eq("id", pipelineId);
 
-    setLista(listaTratada)
+      if (pipelineError) {
+        console.error("Erro ao atualizar pipeline:", pipelineError);
+      }
+    }
+
+    carregarAgenda();
   }
 
-  async function excluir(id: string) {
-    const confirmar = window.confirm("Deseja excluir este atendimento?")
-    if (!confirmar) return
+  async function carregarAgenda() {
+    setLoading(true);
 
-    const { error } = await supabase
-      .from("agenda_atendimentos")
-      .delete()
-      .eq("id", id)
+    const agendaResp = await supabase
+      .from("agenda_comercial")
+      .select(
+        "id, data_agendada, tipo_atendimento, observacoes, status, cliente_id, representante_id, pipeline_id"
+      )
+      .order("data_agendada", { ascending: true });
 
-    if (error) {
-      console.error("Erro ao excluir atendimento:", error)
-      alert("Não foi possível excluir o atendimento.")
-      return
+    if (agendaResp.error) {
+      console.error("Erro ao carregar agenda:", agendaResp.error);
+      setLoading(false);
+      return;
     }
 
-    carregar()
+    const agendaRows = (agendaResp.data as AgendaRow[]) || [];
+
+    const [clientesResp, representantesResp, pipelineResp] = await Promise.all([
+      supabase.from("clientes").select("id, nome"),
+      supabase.from("representantes").select("id, nome"),
+      supabase.from("pipeline_leads").select("*"),
+    ]);
+
+    const clientesMap = new Map<number, string>();
+    (clientesResp.data || []).forEach((c: any) => {
+      clientesMap.set(c.id, c.nome);
+    });
+
+    const representantesMap = new Map<string, string>();
+    (representantesResp.data || []).forEach((r: any) => {
+      representantesMap.set(r.id, r.nome);
+    });
+
+    const pipelineMap = new Map<string, string>();
+    ((pipelineResp.data as PipelineLeadBruto[]) || []).forEach((p) => {
+      pipelineMap.set(p.id, montarNomeLead(p));
+    });
+
+    const agendaFormatada: AgendaItem[] = agendaRows.map((item) => ({
+      id: item.id,
+      data_agendada: item.data_agendada,
+      tipo_atendimento: item.tipo_atendimento,
+      observacoes: item.observacoes,
+      status: item.status,
+      pipeline_id: item.pipeline_id,
+      cliente_nome: clientesMap.get(item.cliente_id || 0) || "-",
+      representante_nome: representantesMap.get(item.representante_id || "") || "-",
+      pipeline_nome: pipelineMap.get(item.pipeline_id || "") || "-",
+    }));
+
+    setAgenda(agendaFormatada);
+    setLoading(false);
   }
 
   useEffect(() => {
-    carregar()
-  }, [])
+    carregarAgenda();
+  }, []);
 
   return (
     <div className="p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Agenda de Atendimentos</h1>
+      <div className="mb-6 flex justify-between">
+        <h1 className="text-2xl font-bold">Agenda Comercial</h1>
 
-        <Link
+        <a
           href="/agenda/novo"
           className="rounded bg-black px-4 py-2 text-white"
         >
-          Novo Atendimento
-        </Link>
+          Novo Agendamento
+        </a>
       </div>
 
-      <div className="overflow-x-auto rounded border">
-        <table className="w-full border-collapse">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="border-b p-3 text-left">Cliente</th>
-              <th className="border-b p-3 text-left">Título</th>
-              <th className="border-b p-3 text-left">Data</th>
-              <th className="border-b p-3 text-left">Hora</th>
-              <th className="border-b p-3 text-left">Status</th>
-              <th className="border-b p-3 text-left">Ações</th>
+      {loading ? (
+        <p>Carregando...</p>
+      ) : (
+        <table className="w-full border">
+          <thead>
+            <tr className="bg-gray-100">
+              <th className="border p-2">Data</th>
+              <th className="border p-2">Cliente</th>
+              <th className="border p-2">Representante</th>
+              <th className="border p-2">Lead</th>
+              <th className="border p-2">Tipo</th>
+              <th className="border p-2">Status</th>
+              <th className="border p-2">Ações</th>
             </tr>
           </thead>
 
           <tbody>
-            {lista.length === 0 ? (
-              <tr>
-                <td colSpan={6} className="p-4 text-center text-gray-500">
-                  Nenhum atendimento cadastrado.
+            {agenda.map((item) => (
+              <tr key={item.id}>
+                <td className="border p-2">
+                  {new Date(item.data_agendada).toLocaleString("pt-BR")}
+                </td>
+
+                <td className="border p-2">{item.cliente_nome}</td>
+                <td className="border p-2">{item.representante_nome}</td>
+                <td className="border p-2">{item.pipeline_nome}</td>
+                <td className="border p-2">{item.tipo_atendimento}</td>
+                <td className="border p-2">{item.status}</td>
+
+                <td className="border p-2 space-x-2">
+                  <button
+                    onClick={() =>
+                      atualizarStatus(item.id, "confirmado", item.pipeline_id)
+                    }
+                    className="rounded bg-blue-600 px-2 py-1 text-white"
+                  >
+                    Confirmar
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      atualizarStatus(item.id, "realizado", item.pipeline_id)
+                    }
+                    className="rounded bg-green-600 px-2 py-1 text-white"
+                  >
+                    Realizado
+                  </button>
+
+                  <button
+                    onClick={() =>
+                      atualizarStatus(item.id, "cancelado", item.pipeline_id)
+                    }
+                    className="rounded bg-red-600 px-2 py-1 text-white"
+                  >
+                    Cancelar
+                  </button>
                 </td>
               </tr>
-            ) : (
-              lista.map((item) => (
-                <tr key={item.id}>
-                  <td className="border-b p-3">
-                    {item.clientes?.nome || "Sem cliente"}
-                  </td>
-
-                  <td className="border-b p-3">{item.titulo}</td>
-
-                  <td className="border-b p-3">{item.data_atendimento}</td>
-
-                  <td className="border-b p-3">{item.hora_atendimento}</td>
-
-                  <td className="border-b p-3">{item.status}</td>
-
-                  <td className="border-b p-3">
-                    <div className="flex gap-3">
-                      <Link
-                        href={`/agenda/${item.id}`}
-                        className="text-blue-600 hover:underline"
-                      >
-                        Editar
-                      </Link>
-
-                      <button
-                        onClick={() => excluir(item.id)}
-                        className="text-red-600 hover:underline"
-                      >
-                        Excluir
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
+            ))}
           </tbody>
         </table>
-      </div>
+      )}
     </div>
-  )
+  );
 }

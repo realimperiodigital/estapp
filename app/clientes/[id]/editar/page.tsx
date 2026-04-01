@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import LiteShell from "@/components/lite-shell";
 import FormCliente from "@/components/form-cliente";
+import { supabase } from "@/lib/supabase";
 
 type Cliente = {
   id: string;
@@ -14,9 +15,9 @@ type Cliente = {
 };
 
 type EditarClientePageProps = {
-  params: {
+  params: Promise<{
     id: string;
-  };
+  }>;
 };
 
 export default function EditarClientePage({
@@ -25,27 +26,42 @@ export default function EditarClientePage({
   const router = useRouter();
 
   const [cliente, setCliente] = useState<Cliente | null>(null);
+  const [clienteId, setClienteId] = useState("");
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
 
   useEffect(() => {
-    async function carregarCliente() {
+    async function resolverParamsECarregar() {
       try {
+        const resolvedParams = await params;
+        const id = resolvedParams.id;
+
+        setClienteId(id);
         setErro("");
         setLoading(true);
 
-        const response = await fetch(`/api/clientes/${params.id}`, {
-          method: "GET",
-          credentials: "include",
-        });
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
 
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(data?.error || "Erro ao carregar cliente.");
+        if (userError || !user) {
+          router.replace("/login");
+          return;
         }
 
-        setCliente(data);
+        const { data, error } = await supabase
+          .from("clientes")
+          .select("*")
+          .eq("id", id)
+          .eq("profissional_id", user.id)
+          .single();
+
+        if (error) {
+          throw new Error(error.message || "Erro ao carregar cliente.");
+        }
+
+        setCliente(data as Cliente);
       } catch (error: any) {
         setErro(error?.message || "Erro ao carregar cliente.");
       } finally {
@@ -53,8 +69,8 @@ export default function EditarClientePage({
       }
     }
 
-    carregarCliente();
-  }, [params.id]);
+    resolverParamsECarregar();
+  }, [params, router]);
 
   async function handleUpdate(values: {
     nome: string;
@@ -62,22 +78,34 @@ export default function EditarClientePage({
     email: string;
     observacoes: string;
   }) {
-    const response = await fetch(`/api/clientes/${params.id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify(values),
-    });
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(data?.error || "Erro ao atualizar cliente.");
+    if (userError || !user) {
+      router.replace("/login");
+      throw new Error("Sessão não encontrada. Faça login novamente.");
     }
 
-    router.push(`/clientes/${params.id}`);
+    const payload = {
+      nome: values.nome,
+      telefone: values.telefone || null,
+      email: values.email || null,
+      observacoes: values.observacoes || null,
+    };
+
+    const { error } = await supabase
+      .from("clientes")
+      .update(payload)
+      .eq("id", clienteId)
+      .eq("profissional_id", user.id);
+
+    if (error) {
+      throw new Error(error.message || "Erro ao atualizar cliente.");
+    }
+
+    router.push(`/clientes/${clienteId}`);
     router.refresh();
   }
 

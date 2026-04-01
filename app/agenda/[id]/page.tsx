@@ -1,139 +1,207 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import Link from "next/link"
+import { useParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase"
+
+type Cliente = {
+  id: number
+  nome: string
+}
 
 type Atendimento = {
   id: string
+  cliente_id: number
   titulo: string
+  descricao: string
   data_atendimento: string
   hora_atendimento: string
   status: string
-  clientes?: {
-    nome: string
-  }
 }
 
-export default function AgendaPage() {
-  const [lista, setLista] = useState<Atendimento[]>([])
+export default function EditarAtendimento() {
 
-  async function carregar() {
+  const { id } = useParams()
+  const router = useRouter()
+
+  const [clientes, setClientes] = useState<Cliente[]>([])
+
+  const [clienteId, setClienteId] = useState<number | null>(null)
+  const [titulo, setTitulo] = useState("")
+  const [descricao, setDescricao] = useState("")
+  const [data, setData] = useState("")
+  const [hora, setHora] = useState("")
+  const [status, setStatus] = useState("AGENDADO")
+
+  async function carregarClientes() {
+
     const { data } = await supabase
-      .from("agenda_atendimentos")
-      .select(`
-        id,
-        titulo,
-        data_atendimento,
-        hora_atendimento,
-        status,
-        clientes(nome)
-      `)
-      .order("data_atendimento", { ascending: true })
+      .from("clientes")
+      .select("id, nome")
+      .order("nome")
 
-    if (data) setLista(data)
+    if (data) setClientes(data)
+
   }
 
-  async function excluir(id: string) {
-    if (!confirm("Deseja excluir este atendimento?")) return
+  async function carregarAtendimento() {
+
+    const { data } = await supabase
+      .from("agenda_atendimentos")
+      .select("*")
+      .eq("id", id)
+      .single()
+
+    if (data) {
+
+      setClienteId(data.cliente_id)
+      setTitulo(data.titulo)
+      setDescricao(data.descricao || "")
+      setData(data.data_atendimento)
+      setHora(data.hora_atendimento)
+      setStatus(data.status)
+
+    }
+
+  }
+
+  async function salvar() {
+
+    await supabase
+      .from("agenda_atendimentos")
+      .update({
+        cliente_id: clienteId,
+        titulo,
+        descricao,
+        data_atendimento: data,
+        hora_atendimento: hora,
+        status
+      })
+      .eq("id", id)
+
+    router.push("/agenda")
+
+  }
+
+  async function excluir() {
+
+    if (!confirm("Deseja excluir este atendimento?"))
+      return
 
     await supabase
       .from("agenda_atendimentos")
       .delete()
       .eq("id", id)
 
-    carregar()
+    router.push("/agenda")
+
   }
 
   useEffect(() => {
-    carregar()
+
+    carregarClientes()
+    carregarAtendimento()
+
   }, [])
 
   return (
-    <div className="p-6">
 
-      <div className="flex justify-between mb-6">
+    <div className="p-6 max-w-xl">
 
-        <h1 className="text-2xl font-bold">
-          Agenda de Atendimentos
-        </h1>
+      <h1 className="text-2xl font-bold mb-6">
+        Editar Atendimento
+      </h1>
 
-        <Link
-          href="/agenda/novo"
-          className="bg-black text-white px-4 py-2 rounded"
+      <div className="flex flex-col gap-3">
+
+        <select
+          value={clienteId || ""}
+          onChange={(e) =>
+            setClienteId(Number(e.target.value))
+          }
+          className="border p-2"
         >
-          Novo Atendimento
-        </Link>
 
-      </div>
+          <option value="">
+            Selecione Cliente
+          </option>
 
-      <table className="w-full border">
+          {clientes.map((c) => (
 
-        <thead className="bg-gray-200">
-
-          <tr>
-            <th className="p-2">Cliente</th>
-            <th className="p-2">Título</th>
-            <th className="p-2">Data</th>
-            <th className="p-2">Hora</th>
-            <th className="p-2">Status</th>
-            <th className="p-2">Ações</th>
-          </tr>
-
-        </thead>
-
-        <tbody>
-
-          {lista.map((item) => (
-
-            <tr key={item.id} className="border-t">
-
-              <td className="p-2">
-                {item.clientes?.nome}
-              </td>
-
-              <td className="p-2">
-                {item.titulo}
-              </td>
-
-              <td className="p-2">
-                {item.data_atendimento}
-              </td>
-
-              <td className="p-2">
-                {item.hora_atendimento}
-              </td>
-
-              <td className="p-2">
-                {item.status}
-              </td>
-
-              <td className="p-2 flex gap-2">
-
-                <Link
-                  href={`/agenda/${item.id}`}
-                  className="text-blue-600"
-                >
-                  Editar
-                </Link>
-
-                <button
-                  onClick={() => excluir(item.id)}
-                  className="text-red-600"
-                >
-                  Excluir
-                </button>
-
-              </td>
-
-            </tr>
+            <option key={c.id} value={c.id}>
+              {c.nome}
+            </option>
 
           ))}
 
-        </tbody>
+        </select>
 
-      </table>
+        <input
+          placeholder="Título"
+          value={titulo}
+          onChange={(e) => setTitulo(e.target.value)}
+          className="border p-2"
+        />
+
+        <textarea
+          placeholder="Descrição"
+          value={descricao}
+          onChange={(e) => setDescricao(e.target.value)}
+          className="border p-2"
+        />
+
+        <input
+          type="date"
+          value={data}
+          onChange={(e) => setData(e.target.value)}
+          className="border p-2"
+        />
+
+        <input
+          type="time"
+          value={hora}
+          onChange={(e) => setHora(e.target.value)}
+          className="border p-2"
+        />
+
+        <select
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+          className="border p-2"
+        >
+
+          <option value="AGENDADO">
+            AGENDADO
+          </option>
+
+          <option value="REALIZADO">
+            REALIZADO
+          </option>
+
+          <option value="CANCELADO">
+            CANCELADO
+          </option>
+
+        </select>
+
+        <button
+          onClick={salvar}
+          className="bg-black text-white p-2 rounded mt-4"
+        >
+          Salvar Alterações
+        </button>
+
+        <button
+          onClick={excluir}
+          className="bg-red-600 text-white p-2 rounded"
+        >
+          Excluir Atendimento
+        </button>
+
+      </div>
 
     </div>
+
   )
+
 }

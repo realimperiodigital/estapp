@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import LiteShell from "@/components/lite-shell";
 import FormCliente from "@/components/form-cliente";
+import { supabase } from "@/lib/supabase";
 
 export default function NovoClientePage() {
   const router = useRouter();
@@ -13,19 +14,30 @@ export default function NovoClientePage() {
     email: string;
     observacoes: string;
   }) {
-    const response = await fetch("/api/clientes", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify(values),
-    });
+    const {
+      data: { user },
+      error: userError,
+    } = await supabase.auth.getUser();
 
-    const data = await response.json();
+    if (userError || !user) {
+      router.replace("/login");
+      throw new Error("Sessão não encontrada. Faça login novamente.");
+    }
 
-    if (!response.ok) {
-      throw new Error(data?.error || "Erro ao criar cliente.");
+    const payload = {
+      profissional_id: user.id,
+      nome: values.nome,
+      telefone: values.telefone || null,
+      email: values.email || null,
+      observacoes: values.observacoes || null,
+    };
+
+    const { error } = await supabase
+      .from("clientes")
+      .insert(payload);
+
+    if (error) {
+      throw new Error(error.message || "Erro ao criar cliente.");
     }
 
     router.push("/clientes");
@@ -63,7 +75,10 @@ export default function NovoClientePage() {
           Preencha os dados básicos para salvar o cliente no EstApp Lite.
         </p>
 
-        <FormCliente onSubmit={handleCreate} submitLabel="Salvar cliente" />
+        <FormCliente
+          onSubmit={handleCreate}
+          submitLabel="Salvar cliente"
+        />
       </div>
     </LiteShell>
   );

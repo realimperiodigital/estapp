@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import LiteShell from "@/components/lite-shell";
 import { supabase } from "@/lib/supabase";
 
@@ -12,6 +13,8 @@ type DashboardStats = {
 };
 
 export default function DashboardPage() {
+  const router = useRouter();
+
   const [stats, setStats] = useState<DashboardStats>({
     clientes: 0,
     servicos: 0,
@@ -23,6 +26,8 @@ export default function DashboardPage() {
   const [nome, setNome] = useState("Profissional");
 
   useEffect(() => {
+    let ativo = true;
+
     async function carregarDashboard() {
       try {
         const {
@@ -31,7 +36,8 @@ export default function DashboardPage() {
         } = await supabase.auth.getUser();
 
         if (userError || !user) {
-          throw new Error("Usuário não autenticado.");
+          router.replace("/login");
+          return;
         }
 
         const [profileRes, clientesRes, servicosRes, agendaRes, reservasRes] =
@@ -63,6 +69,8 @@ export default function DashboardPage() {
               .eq("profissional_id", user.id),
           ]);
 
+        if (!ativo) return;
+
         if (profileRes.data?.nome) {
           setNome(profileRes.data.nome);
         }
@@ -76,12 +84,18 @@ export default function DashboardPage() {
       } catch (error) {
         console.error("Erro ao carregar dashboard:", error);
       } finally {
-        setLoading(false);
+        if (ativo) {
+          setLoading(false);
+        }
       }
     }
 
     carregarDashboard();
-  }, []);
+
+    return () => {
+      ativo = false;
+    };
+  }, [router]);
 
   return (
     <LiteShell title="Dashboard">
@@ -127,149 +141,41 @@ export default function DashboardPage() {
             gap: "16px",
           }}
         >
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: "16px",
-              padding: "20px",
-              boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
-            }}
-          >
+          {[
+            { label: "Clientes", value: stats.clientes },
+            { label: "Serviços", value: stats.servicos },
+            { label: "Agenda", value: stats.agenda },
+            { label: "Reservas", value: stats.reservas },
+          ].map((item) => (
             <div
+              key={item.label}
               style={{
-                fontSize: "14px",
-                color: "#666",
-                marginBottom: "10px",
+                background: "#fff",
+                borderRadius: "16px",
+                padding: "20px",
+                boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
               }}
             >
-              Clientes
+              <div
+                style={{
+                  fontSize: "14px",
+                  color: "#666",
+                  marginBottom: "10px",
+                }}
+              >
+                {item.label}
+              </div>
+              <div
+                style={{
+                  fontSize: "30px",
+                  fontWeight: 700,
+                  color: "#111",
+                }}
+              >
+                {loading ? "..." : item.value}
+              </div>
             </div>
-            <div
-              style={{
-                fontSize: "30px",
-                fontWeight: 700,
-                color: "#111",
-              }}
-            >
-              {loading ? "..." : stats.clientes}
-            </div>
-          </div>
-
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: "16px",
-              padding: "20px",
-              boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "14px",
-                color: "#666",
-                marginBottom: "10px",
-              }}
-            >
-              Serviços
-            </div>
-            <div
-              style={{
-                fontSize: "30px",
-                fontWeight: 700,
-                color: "#111",
-              }}
-            >
-              {loading ? "..." : stats.servicos}
-            </div>
-          </div>
-
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: "16px",
-              padding: "20px",
-              boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "14px",
-                color: "#666",
-                marginBottom: "10px",
-              }}
-            >
-              Agenda
-            </div>
-            <div
-              style={{
-                fontSize: "30px",
-                fontWeight: 700,
-                color: "#111",
-              }}
-            >
-              {loading ? "..." : stats.agenda}
-            </div>
-          </div>
-
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: "16px",
-              padding: "20px",
-              boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "14px",
-                color: "#666",
-                marginBottom: "10px",
-              }}
-            >
-              Reservas
-            </div>
-            <div
-              style={{
-                fontSize: "30px",
-                fontWeight: 700,
-                color: "#111",
-              }}
-            >
-              {loading ? "..." : stats.reservas}
-            </div>
-          </div>
-        </section>
-
-        <section
-          style={{
-            background: "#fff",
-            borderRadius: "16px",
-            padding: "24px",
-            boxShadow: "0 4px 14px rgba(0,0,0,0.06)",
-          }}
-        >
-          <h3
-            style={{
-              fontSize: "20px",
-              marginBottom: "12px",
-              color: "#111",
-            }}
-          >
-            Próximos passos do Lite
-          </h3>
-
-          <ul
-            style={{
-              paddingLeft: "18px",
-              color: "#444",
-              lineHeight: 1.8,
-            }}
-          >
-            <li>Cadastrar clientes</li>
-            <li>Cadastrar serviços</li>
-            <li>Abrir horários na agenda</li>
-            <li>Receber e controlar reservas</li>
-          </ul>
+          ))}
         </section>
       </div>
     </LiteShell>

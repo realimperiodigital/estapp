@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import LiteShell from "@/components/lite-shell";
+import { supabase } from "@/lib/supabase";
 
 type Cliente = {
   id: string;
@@ -14,6 +16,8 @@ type Cliente = {
 };
 
 export default function ClientesPage() {
+  const router = useRouter();
+
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
@@ -23,18 +27,27 @@ export default function ClientesPage() {
       setErro("");
       setLoading(true);
 
-      const response = await fetch("/api/clientes", {
-        method: "GET",
-        credentials: "include",
-      });
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data?.error || "Erro ao carregar clientes.");
+      if (userError || !user) {
+        router.replace("/login");
+        return;
       }
 
-      setClientes(data);
+      const { data, error } = await supabase
+        .from("clientes")
+        .select("*")
+        .eq("profissional_id", user.id)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        throw new Error(error.message || "Erro ao carregar clientes.");
+      }
+
+      setClientes((data as Cliente[]) || []);
     } catch (error: any) {
       setErro(error?.message || "Erro ao carregar clientes.");
     } finally {
@@ -47,15 +60,24 @@ export default function ClientesPage() {
     if (!confirmar) return;
 
     try {
-      const response = await fetch(`/api/clientes/${id}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-      const data = await response.json();
+      if (userError || !user) {
+        router.replace("/login");
+        return;
+      }
 
-      if (!response.ok) {
-        throw new Error(data?.error || "Erro ao excluir cliente.");
+      const { error } = await supabase
+        .from("clientes")
+        .delete()
+        .eq("id", id)
+        .eq("profissional_id", user.id);
+
+      if (error) {
+        throw new Error(error.message || "Erro ao excluir cliente.");
       }
 
       await carregarClientes();
@@ -155,12 +177,18 @@ export default function ClientesPage() {
                       {cliente.nome}
                     </h3>
                     <p style={{ color: "#666", marginTop: "4px" }}>
-                      {cliente.telefone || "Sem telefone"}{" "}
-                      {cliente.email ? `• ${cliente.email}` : ""}
+                      {cliente.telefone || "Sem telefone"}
+                      {cliente.email ? ` • ${cliente.email}` : ""}
                     </p>
                   </div>
 
-                  <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "10px",
+                      flexWrap: "wrap",
+                    }}
+                  >
                     <Link
                       href={`/clientes/${cliente.id}`}
                       style={{

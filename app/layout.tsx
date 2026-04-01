@@ -1,10 +1,8 @@
-import type { Metadata } from "next";
 import "./globals.css";
-import AuthGuard from "./components/authguard";
 
-export const metadata: Metadata = {
-  title: "EstApp",
-  description: "Seu aplicativo exclusivo",
+export const metadata = {
+  title: "EstApp Lite",
+  description: "Sistema simples de agendamento profissional",
 };
 
 export default function RootLayout({
@@ -15,7 +13,7 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body>
-        <AuthGuard>{children}</AuthGuard>
+        {children}
       </body>
     </html>
   );

@@ -2,92 +2,89 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { supabase } from "../../lib/supabase";
+
+import { loginWithEmail } from "@/lib/auth";
 
 export default function LoginPage() {
   const router = useRouter();
 
   const [email, setEmail] = useState("");
-  const [senha, setSenha] = useState("");
+  const [password, setPassword] = useState("");
+
   const [loading, setLoading] = useState(false);
-  const [erro, setErro] = useState("");
+  const [error, setError] = useState("");
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
 
+    setError("");
     setLoading(true);
-    setErro("");
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: senha,
-    });
+    try {
+      await loginWithEmail({
+        email,
+        password,
+      });
 
-    if (error) {
-      setErro("Email ou senha inválidos.");
+      router.push("/dashboard");
+    } catch (err: any) {
+      setError(err.message || "Erro ao fazer login");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    router.push("/dashboard");
   }
 
   return (
-    <main className="min-h-screen bg-neutral-950 text-white flex items-center justify-center px-6">
-      <div className="w-full max-w-md">
+    <div className="container">
+      <div className="card">
 
-        <Link
-          href="/"
-          className="text-sm text-neutral-400 hover:text-white"
-        >
-          ← Voltar
-        </Link>
-
-        <h1 className="mt-6 text-3xl font-bold">
-          Login
+        <h1 className="title">
+          EstApp Lite
         </h1>
 
-        <form
-          onSubmit={handleLogin}
-          className="mt-6 space-y-4"
-        >
+        <form onSubmit={handleLogin}>
+
+          {error && (
+            <div className="error">
+              {error}
+            </div>
+          )}
 
           <input
             type="email"
             placeholder="Seu email"
+            className="input"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-xl bg-neutral-900 border border-neutral-700 px-4 py-3 outline-none focus:border-amber-500"
+            onChange={(e) =>
+              setEmail(e.target.value)
+            }
             required
           />
 
           <input
             type="password"
             placeholder="Sua senha"
-            value={senha}
-            onChange={(e) => setSenha(e.target.value)}
-            className="w-full rounded-xl bg-neutral-900 border border-neutral-700 px-4 py-3 outline-none focus:border-amber-500"
+            className="input"
+            value={password}
+            onChange={(e) =>
+              setPassword(e.target.value)
+            }
             required
           />
 
-          {erro && (
-            <p className="text-red-400 text-sm">
-              {erro}
-            </p>
-          )}
-
           <button
             type="submit"
+            className="button"
             disabled={loading}
-            className="w-full rounded-xl bg-amber-500 text-black font-semibold py-3 hover:bg-amber-400 transition disabled:opacity-50"
           >
-            {loading ? "Entrando..." : "Entrar"}
+            {loading
+              ? "Entrando..."
+              : "Entrar"}
           </button>
 
         </form>
 
       </div>
-    </main>
+    </div>
   );
 }
